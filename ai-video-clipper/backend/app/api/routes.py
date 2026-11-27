@@ -15,7 +15,7 @@ from app.niches import BASE_EDIT, NICHES, merge_edit_settings
 from app.pipeline.captions import CAPTION_STYLES, to_srt
 from app.pipeline.media import ALLOWED_EXTENSIONS
 from app.pipeline.render import map_words, KeepSegment
-from app.pipeline.segments import words_in_range
+from app.pipeline.segments import effective_words, words_in_range
 from app.providers.llm import get_llm
 from app.schemas import PLATFORMS, RIGHTS_BASES, ClipOut, ClipPatch, ProjectOut, ProjectSummary, SettingIn
 from app.storage import get_storage
@@ -215,12 +215,12 @@ def get_clip(cid: str, db: Session = Depends(get_db)):
 
 
 @router.get("/clips/{cid}/words")
-def clip_words(cid: str, db: Session = Depends(get_db)):
-    """Words for the caption editor, in clip time (seconds from clip start, before silence removal)."""
+def clip_words(cid: str, pad: float = Query(20.0, ge=0, le=120), db: Session = Depends(get_db)):
+    """Words around the clip in absolute source time, with caption edits applied (for the editor timeline)."""
     c = _get_clip(db, cid)
-    overrides = (c.edit_settings or {}).get("word_overrides")
-    words = overrides or words_in_range(c.project.transcript, c.start, c.end)
-    return {"words": map_words(words, [KeepSegment(c.start, c.end, 0.0)]), "edited": bool(overrides)}
+    overrides = (c.edit_settings or {}).get("word_overrides") or []
+    return {"words": effective_words(c.project.transcript, max(c.start - pad, 0), c.end + pad, overrides),
+            "edited": bool(overrides)}
 
 
 @router.patch("/clips/{cid}", response_model=ClipOut)
@@ -239,10 +239,6 @@ def patch_clip(cid: str, patch: ClipPatch, db: Session = Depends(get_db)):
     if "start" in data or "end" in data:
         c.transcript_text = " ".join(w["word"] for w in words_in_range(c.project.transcript, c.start, c.end))
     if edit is not None:
-        if "word_overrides" in edit and edit["word_overrides"]:
-            # caption editor sends clip-relative times; store source times
-            edit["word_overrides"] = [{**w, "start": round(c.start + float(w["start"]), 3),
-                                       "end": round(c.start + float(w["end"]), 3)} for w in edit["word_overrides"]]
         c.edit_settings = edit if replace else merge_edit_settings(c.edit_settings or {}, edit)
     if c.render_status == "rendered":
         c.render_status = "draft"  # edits make the previous render stale (file is kept until re-render)
@@ -293,7 +289,7 @@ def preview(cid: str, db: Session = Depends(get_db)):
 @router.get("/clips/{cid}/srt", response_class=PlainTextResponse)
 def srt(cid: str, db: Session = Depends(get_db)):
     c = _get_clip(db, cid)
-    words = (c.edit_settings or {}).get("word_overrides") or words_in_range(c.project.transcript, c.start, c.end)
+    words = effective_words(c.project.transcript, c.start, c.end, (c.edit_settings or {}).get("word_overrides"))
     return to_srt(map_words(words, [KeepSegment(c.start, c.end, 0.0)]))
 
 

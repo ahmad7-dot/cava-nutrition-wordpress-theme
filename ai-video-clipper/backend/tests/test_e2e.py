@@ -68,8 +68,14 @@ def test_full_pipeline(client, sample_video):
     clip = project["clips"][0]
     assert 0 <= clip["score"] <= 100 and len(clip["alt_hooks"]) == 3
 
-    words = client.get(f"/api/clips/{clip['id']}/words").json()["words"]
-    assert words and words[0]["start"] >= 0
+    words = client.get(f"/api/clips/{clip['id']}/words?pad=0").json()["words"]
+    assert words and words[0]["start"] >= clip["start"] - 0.5
+    fixed = {"start": words[0]["start"], "end": words[0]["end"], "word": "EDITED"}
+    r = client.patch(f"/api/clips/{clip['id']}", json={"edit_settings": {"word_overrides": [fixed]}})
+    assert r.status_code == 200
+    again = client.get(f"/api/clips/{clip['id']}/words?pad=0").json()
+    assert again["edited"] and again["words"][0]["word"] == "EDITED"
+    assert "EDITED" in client.get(f"/api/clips/{clip['id']}/srt").text
 
     r = client.patch(f"/api/clips/{clip['id']}", json={
         "hook": "One rule changed everything",

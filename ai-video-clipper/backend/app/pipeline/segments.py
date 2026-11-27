@@ -92,3 +92,24 @@ def window_for_range(sentences: list[Sentence], first: int, last: int) -> Window
 
 def words_in_range(transcript: dict, start: float, end: float) -> list[dict]:
     return [w for w in all_words(transcript) if w["end"] > start and w["start"] < end]
+
+
+def effective_words(transcript: dict, start: float, end: float, overrides: list[dict] | None = None) -> list[dict]:
+    """Transcript words in [start, end] with the user's caption edits applied.
+
+    Overrides use absolute source times and replace the transcript word that starts at the same moment.
+    An override with an empty `word` deletes that word. Because overrides are matched by time, they stay
+    valid when the clip is re-trimmed.
+    """
+    words = words_in_range(transcript, start, end)
+    if not overrides:
+        return words
+    by_start = {round(float(o["start"]), 2): o for o in overrides}
+    out = []
+    for w in words:
+        o = by_start.get(round(float(w["start"]), 2))
+        if o is None:
+            out.append(w)
+        elif str(o.get("word", "")).strip():
+            out.append({**w, "word": str(o["word"]).strip()})
+    return out

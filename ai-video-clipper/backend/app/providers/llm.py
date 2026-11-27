@@ -231,7 +231,7 @@ class HeuristicProvider:
                            Hook(style="question", text=f"{_shorten(first_line.rstrip('.!?'), 50)}?"),
                            Hook(style="educational", text=f"One lesson from {req.title[:40]}")],
                 scores=Scores(**{k: int(v) for k, v in b.items()}),
-                reason=f"Rule-based pick: strongest {', '.join(_top_criteria(b))}.",
+                reason=f"Rule-based pick: scored highest on {' and '.join(_top_criteria(b))}.",
                 target_audience=f"Viewers interested in {req.niche}",
                 recommended_platform="tiktok" if w.duration <= 45 else "youtube_shorts",
                 caption=_shorten(w.text, 200), hashtags=[req.niche, "shorts", "fyp"],

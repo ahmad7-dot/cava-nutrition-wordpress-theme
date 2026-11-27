@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; --font-inter: "Inter", "InterVariable"; }
+body { @apply bg-ink-950 text-haze-100 antialiased; }
+
+@layer components {
+  .card { @apply rounded-2xl border border-ink-700 bg-ink-900; }
+  .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-haze-400; }
+  .input { @apply w-full rounded-lg border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-haze-100 placeholder:text-haze-500 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-accent text-white hover:bg-accent-strong; }
+  .btn-ghost { @apply btn border border-ink-700 bg-ink-850 text-haze-100 hover:border-ink-600 hover:bg-ink-800; }
+  .btn-danger { @apply btn border border-rose/30 bg-rose/10 text-rose hover:bg-rose/20; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-ink-700 bg-ink-850 px-2.5 py-1 text-xs text-haze-300; }
+  .chip-on { @apply border-accent/60 bg-accent-soft text-haze-100; }
+}
+
+input[type="range"] { accent-color: #8B7CF6; }
+input[type="checkbox"] { accent-color: #8B7CF6; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #1F2430; border-radius: 8px; }

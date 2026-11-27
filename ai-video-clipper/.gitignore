@@ -7,3 +7,4 @@ frontend/.next/
 frontend/.env.local
 *.mp4
 !frontend/public/*.mp4
+frontend/*.tsbuildinfo

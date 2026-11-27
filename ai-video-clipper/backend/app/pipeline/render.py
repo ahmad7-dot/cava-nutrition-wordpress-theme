@@ -184,6 +184,42 @@ class Composer:
         return out
 
 
+
+class ImageOverlays:
+    """PNG/JPG overlays (logos, supporting images) blended onto output frames during their time range.
+
+    Each overlay: {"path": Path, "start": s, "end": s, "x": 0..1, "y": 0..1, "width": 0..1} where x/y are the
+    centre of the image as a fraction of the output frame and width is a fraction of output width.
+    """
+
+    def __init__(self, overlays: list[dict], out_w: int, out_h: int):
+        self.items = []
+        for ov in overlays:
+            img = cv2.imread(str(ov["path"]), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                continue
+            if img.ndim == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGRA)
+            elif img.shape[2] == 3:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+            w = max(int(out_w * float(ov.get("width", 0.3))), 8)
+            h = max(int(img.shape[0] * w / img.shape[1]), 8)
+            img = cv2.resize(img, (min(w, out_w), min(h, out_h)), interpolation=cv2.INTER_AREA)
+            x = int(np.clip(float(ov.get("x", 0.5)) * out_w - img.shape[1] / 2, 0, out_w - img.shape[1]))
+            y = int(np.clip(float(ov.get("y", 0.2)) * out_h - img.shape[0] / 2, 0, out_h - img.shape[0]))
+            alpha = (img[:, :, 3:4].astype(np.float32) / 255.0)
+            self.items.append((float(ov.get("start", 0)), float(ov.get("end", 1e9)), x, y,
+                               img[:, :, :3].astype(np.float32), alpha))
+
+    def apply(self, frame, t: float):
+        for start, end, x, y, rgb, alpha in self.items:
+            if start <= t <= end:
+                h, w = rgb.shape[:2]
+                roi = frame[y:y + h, x:x + w].astype(np.float32)
+                frame[y:y + h, x:x + w] = (rgb * alpha + roi * (1 - alpha)).astype(np.uint8)
+        return frame
+
+
 def zoom_curve(words: list[dict], emphasis: list[str], strength: float):
     """Punch-in zoom around emphasised words: eases in over 0.25s, holds, eases out."""
     import re as _re
@@ -216,7 +252,7 @@ ProgressFn = Callable[[float], None]
 def render_clip(source: Path, start: float, end: float, words: list[dict], edit: dict, out_path: Path,
                 work: Path, *, hook: str = "", emphasis: list[str] | None = None,
                 music_path: Path | None = None, voiceover_path: Path | None = None,
-                progress: ProgressFn = lambda p: None) -> dict:
+                image_overlays: list[dict] | None = None, progress: ProgressFn = lambda p: None) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     info = probe(source)
     has_audio = info["has_audio"]
@@ -248,6 +284,7 @@ def render_clip(source: Path, start: float, end: float, words: list[dict], edit:
                     overlays=edit.get("text_overlays", []), duration=duration)
     (work / "subs.ass").write_text(ass, encoding="utf-8")
 
+    images = ImageOverlays(image_overlays or [], out_w, out_h)
     zoom_at = zoom_curve(clip_words, emphasis or [], float(edit.get("zoom_strength", 0.08))) \
         if edit.get("zoom_on_emphasis") else (lambda t: 1.0)
 
@@ -308,7 +345,7 @@ def render_clip(source: Path, start: float, end: float, words: list[dict], edit:
             if not ok:
                 break
             t = i / fps
-            proc.stdin.write(composer.frame(frame, t, zoom_at(t)).tobytes())
+            proc.stdin.write(images.apply(composer.frame(frame, t, zoom_at(t)), t).tobytes())
             i += 1
             if i % 30 == 0:
                 progress(0.25 + 0.7 * min(i / max(total, 1), 1.0))

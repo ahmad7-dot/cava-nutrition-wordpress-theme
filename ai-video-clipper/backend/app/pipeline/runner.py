@@ -13,7 +13,7 @@ from app.niches import default_edit_settings, niche_focus
 from app.pipeline import media, reframe
 from app.pipeline.render import render_clip
 from app.pipeline.scoring import overall
-from app.pipeline.segments import build_sentences, window_for_range, words_in_range
+from app.pipeline.segments import build_sentences, effective_words, window_for_range
 from app.providers.llm import AnalysisResult, ClipPlan, SelectionRequest, get_llm
 from app.providers.transcription import get_transcriber
 from app.storage import get_storage
@@ -164,9 +164,8 @@ def render(clip_id: str, job_id: str | None = None) -> None:
         src = storage.local_path(project.source_key)
         settings = get_settings()
         edit = clip.edit_settings or default_edit_settings(project.niche)
-        words = edit.get("word_overrides") or words_in_range(
-            project.transcript, clip.start + edit.get("trim_start_offset", 0) - 0.5,
-            clip.end + edit.get("trim_end_offset", 0) + 0.5)
+        words = effective_words(project.transcript, clip.start + edit.get("trim_start_offset", 0) - 0.5,
+                                clip.end + edit.get("trim_end_offset", 0) + 0.5, edit.get("word_overrides"))
         music = None
         if edit.get("music") and edit["music"].get("file"):
             candidate = (settings.music_library_dir / Path(edit["music"]["file"]).name)
@@ -174,6 +173,9 @@ def render(clip_id: str, job_id: str | None = None) -> None:
         voiceover = None
         if edit.get("voiceover") and edit["voiceover"].get("key"):
             voiceover = storage.local_path(edit["voiceover"]["key"])
+
+        images = [{**ov, "path": storage.local_path(ov["key"])} for ov in edit.get("image_overlays", [])
+                  if ov.get("key")]
 
         last = [0.0]
 
@@ -188,7 +190,8 @@ def render(clip_id: str, job_id: str | None = None) -> None:
         out = settings.outputs_dir / f"{clip.id}.mp4"
         info = render_clip(src, clip.start, clip.end, words, edit, out, settings.work_dir / f"r_{clip.id}",
                            hook=clip.hook, emphasis=clip.emphasis_words, music_path=music,
-                           voiceover_path=voiceover, progress=progress)
+                           voiceover_path=voiceover, image_overlays=images,
+                           progress=progress)
         key = f"outputs/{project.id}/{clip.id}.mp4"
         storage.put_file(key, out)
         if storage.local_path(key).resolve() != out.resolve():

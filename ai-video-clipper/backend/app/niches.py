@@ -31,7 +31,8 @@ BASE_EDIT = {
     "min_silence": 0.6,
     "zoom_on_emphasis": True,
     "zoom_strength": 0.08,
-    "text_overlays": [],  # [{text, start, end, position}]  times relative to clip start
+    "text_overlays": [],
+    "image_overlays": [],  # [{key, start, end, x, y, width}] uploaded via /api/assets  # [{text, start, end, position}]  times relative to clip start
     "hook_overlay": True,  # show chosen hook as a title card for the first seconds
     "hook_overlay_seconds": 2.5,
     "music": None,  # {file, volume} - file must be in the licensed music library

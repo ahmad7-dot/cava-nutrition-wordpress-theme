@@ -71,3 +71,16 @@ def test_edit_settings_merge():
     merged = merge_edit_settings(base, {"captions": {"font_size": 90}, "layout": "blur"})
     assert merged["captions"]["font_size"] == 90 and merged["captions"]["style"] == base["captions"]["style"]
     assert merged["layout"] == "blur"
+
+
+def test_caption_overrides_survive_retrim():
+    from app.pipeline.segments import effective_words
+    t = fake_transcript()
+    first = t["segments"][0]["words"]
+    overrides = [{"start": first[0]["start"], "end": first[0]["end"], "word": "HERE IS"},
+                 {"start": first[1]["start"], "end": first[1]["end"], "word": ""}]
+    words = effective_words(t, 0, 3, overrides)
+    assert words[0]["word"] == "HERE IS" and words[1]["word"] == first[2]["word"]
+    # re-trimmed window that starts later still works and ignores out-of-range overrides
+    later = effective_words(t, first[2]["start"], 5, overrides)
+    assert later[0]["word"] == first[2]["word"]
