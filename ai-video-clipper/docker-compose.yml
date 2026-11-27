@@ -1,0 +1,37 @@
+# Full stack: web (Next.js) -> api (FastAPI) -> worker (Celery) with Postgres + Redis.
+# Usage: ANTHROPIC_API_KEY=... docker compose up --build   then open http://localhost:3000
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: clipper, POSTGRES_PASSWORD: clipper, POSTGRES_DB: clipper }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U clipper"], interval: 5s, retries: 10 }
+
+  redis:
+    image: redis:7-alpine
+
+  api: &api
+    build: ./backend
+    environment: &env
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLIPPER_DATABASE_URL: postgresql+psycopg://clipper:clipper@db:5432/clipper
+      CLIPPER_USE_CELERY: "true"
+      CLIPPER_REDIS_URL: redis://redis:6379/0
+      CLIPPER_WHISPER_MODEL: ${CLIPPER_WHISPER_MODEL:-small}
+      CLIPPER_DATA_DIR: /data
+    volumes: [media:/data, whisper:/root/.cache]
+    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
+    ports: ["8000:8000"]
+
+  worker:
+    <<: *api
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+    ports: []
+
+  web:
+    build: { context: ./frontend, args: { BACKEND_URL: http://api:8000 } }
+    environment: { BACKEND_URL: http://api:8000 }
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+volumes: { pgdata: {}, media: {}, whisper: {} }
